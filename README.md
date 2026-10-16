@@ -57,7 +57,8 @@ Switching a profile:
 3. writes the profile's parameters that differ, then reads every one back (stops on a mismatch);
 4. sets `PUBLISH_TO_PX4` in `~/mullet-localization/.env` and runs `docker compose up -d ev_bridge`;
 5. if `EKF2_MAG_TYPE` changed, asks before rebooting the Pixhawk (only while disarmed); it takes effect only
-   after the reboot.
+   after the reboot. It saves the parameters to flash first (PX4's own autosave is delayed, and a reboot
+   can beat it) and reads the profile back once PX4 is up again.
 
 `--show` reports drift: any parameter that differs from `baseline.params` + the active profile.
 `_HASH_CHECK`, `CAL_BARO*_OFF` and the flight counters change by themselves and are ignored.
