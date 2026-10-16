@@ -1,0 +1,22 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  params:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"  # the Orin's
+      - run: pip install pyyaml
+      - run: python scripts/check_params.py
+      - name: An out-of-range value fails the check
+        run: |
+          sed 's/EKF2_RNG_A_VMAX\t2\t/EKF2_RNG_A_VMAX\t3\t/' profiles/outdoor.params > bad.params
+          grep -P 'EKF2_RNG_A_VMAX\t3\t' bad.params
+          ! python scripts/check_params.py bad.params
+      - run: python scripts/set-profile.py --selftest

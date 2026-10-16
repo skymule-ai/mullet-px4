@@ -1,0 +1,17 @@
+# Localization profiles. Every profile sets the same parameter names, so `set-profile.py --show` can tell
+# which one is active. publish_to_px4 is the px4_ev_bridge mode (PUBLISH_TO_PX4 in mullet-localization/.env):
+# false = shadow (odometry recorded, not sent to PX4), true = fused.
+default: outdoor
+profiles:
+  outdoor:
+    params: outdoor.params
+    publish_to_px4: false
+    note: GPS + compass; vision recorded only
+  outdoor-vio:
+    params: outdoor-vio.params
+    publish_to_px4: true
+    note: vision fused alongside GPS and compass
+  indoor:
+    params: indoor.params
+    publish_to_px4: true
+    note: vision position + heading, compass off; bench/walk only until PX4 aligns yaw on vision heading
