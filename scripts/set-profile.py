@@ -81,7 +81,8 @@ class Px4:
     def __init__(self, url):
         from pymavlink import mavutil
         self.M = mavutil.mavlink
-        self.m = mavutil.mavlink_connection(url, source_system=254, source_component=190)
+        self._connect = lambda: mavutil.mavlink_connection(url, source_system=254, source_component=190)
+        self.m = self._connect()
 
     def _recv(self, mtype, timeout):
         end = time.time() + timeout
@@ -129,10 +130,37 @@ class Px4:
             sys.exit(f"parameter dump incomplete: {len(params)} of {total}")
         return params
 
+    def _command(self, command, param1):
+        self.m.mav.command_long_send(1, 1, command, 0, param1, 0, 0, 0, 0, 0, 0)
+        end = time.time() + 5
+        while (ack := self._recv("COMMAND_ACK", end - time.time())) is not None:
+            if ack.command == command:
+                return ack.result == self.M.MAV_RESULT_ACCEPTED
+        return False
+
     def reboot(self):
-        self.m.mav.command_long_send(1, 1, self.M.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN, 0, 1, 0, 0, 0, 0, 0, 0)
-        ack = self._recv("COMMAND_ACK", 5)
-        print("reboot accepted" if ack and ack.result == 0 else f"reboot NOT accepted: {ack}")
+        """Saves parameters to flash, reboots, and waits for PX4 to come back."""
+        # PX4 autosaves parameters after a delay: a reboot right after a write can lose it
+        # (EKF2_MAG_TYPE did on 2026-10-16). Save explicitly first.
+        if not self._command(self.M.MAV_CMD_PREFLIGHT_STORAGE, 1):
+            sys.exit("parameter save NOT accepted: not rebooting")
+        if not self._command(self.M.MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN, 1):
+            sys.exit("reboot NOT accepted")
+        print("rebooting the Pixhawk")
+        # mavlink-router exits when the Pixhawk's USB goes away and systemd restarts it: reconnect.
+        self.m.close()
+        end = time.time() + 60
+        while True:
+            time.sleep(5)
+            try:
+                self.m = self._connect()
+                if self._recv("HEARTBEAT", 5) is not None:
+                    return
+                self.m.close()
+            except OSError:
+                pass  # router not listening yet
+            if time.time() > end:
+                sys.exit("PX4 did not come back within 60 s")
 
 
 def backup(px4, drone):
@@ -184,6 +212,10 @@ def apply(px4, drone, name, cfg):
             sys.exit("armed: not rebooting")
         else:
             px4.reboot()
+            bad = [k for k, (v, _) in profile["values"].items() if not same(px4.read(k)[0], v)]
+            if bad:
+                sys.exit(f"after the reboot {bad} are not the profile's values")
+            print(f"after the reboot: {len(profile['values'])} parameters read back OK")
 
 
 def show(px4, drone, cfg):
