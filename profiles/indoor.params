@@ -1,6 +1,7 @@
 # mullet-px4 profile: only the parameters this profile sets (QGC format: Vehicle-Id Component-Id Name Value Type)
 # indoor
 1	1	EKF2_EV_CTRL	13	6
+1	1	EKF2_MAG_CHECK	1	6
 1	1	EKF2_MAG_TYPE	5	6
 1	1	EKF2_MIN_RNG	0.21	9
 1	1	EKF2_RNG_A_VMAX	2	9
