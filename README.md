@@ -29,13 +29,21 @@ the drone's `baseline.params` (*Parameters → Tools → Load from file*) and re
 - `scripts/check_params.py`: CI check of every file against the firmware's parameter metadata.
 
 ## Profiles
-All of them also set `EKF2_RNG_A_VMAX 2.0` and `EKF2_MIN_RNG 0.21`.
+All of them also set `EKF2_RNG_A_VMAX 2.0`, `EKF2_MIN_RNG 0.21` and `EKF2_MAG_CHECK` (1 = field strength
+check, the baseline value; `outdoor-vio` sets 3 = strength + inclination).
 
 | Profile | `EKF2_EV_CTRL` | `EKF2_MAG_TYPE` | Bridge | Use |
 | --- | --- | --- | --- | --- |
 | `outdoor` (default) | 0 | 0 | shadow | GPS + compass; vision recorded only |
-| `outdoor-vio` | 5 | 0 | fused | vision position + velocity fused alongside GPS and compass |
+| `outdoor-vio` | 5 | 0 | fused | vision position + velocity fused alongside GPS and compass; for outdoor ↔ indoor walks (see below) |
 | `indoor` | 13 | 5 | fused | vision position + heading, compass off. **Bench/walk only**: PX4 does not yet align yaw on vision heading |
+
+`outdoor-vio` across outdoor ↔ indoor: EKF2 learns the rotation from the vision frame to NED while GPS and
+compass are fused, and keeps fusing vision position + velocity through it when they drop out, so the
+heading holds without a reset. The compass stops on its own where the field fails the strength or
+inclination check, or disagrees with the vision-aided heading. Vision yaw is left off on purpose: with an
+FRD vision frame PX4 blocks it while GPS is fused and, when GPS drops, resets the heading to the raw vision
+yaw (`ev_yaw_control.cpp`). Start where GPS and the compass are good.
 
 Bridge = `px4_ev_bridge` in mullet-localization (`PUBLISH_TO_PX4` in its `.env`): shadow publishes the
 odometry on `/localization/vehicle_odometry` only, fused also sends it to PX4.
