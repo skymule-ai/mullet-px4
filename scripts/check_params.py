@@ -22,6 +22,12 @@ FIRMWARE_URL = "https://github.com/PX4/PX4-Autopilot/releases/download/v1.17.0/p
 FIRMWARE_SHA256 = "0d9ac77b8cdaf30a7cb1127200e20f9d42e7586a6b47d6bf32444b5852e98387"
 # mullet1's v1.17.0 build also has the CRSF RC driver (crsf_rc), which the release build leaves out.
 EXTRA_PARAMS = {"RC_CRSF_PRT_CFG", "RC_CRSF_TEL_EN"}
+# Values deliberately outside the metadata range. PX4 does not clamp these in code; QGC shows them as out of range.
+RANGE_OVERRIDES = {
+    # Issue #4 (temporary): the hflow board labels ~8.1 ms of flow as 15.872 ms, so flow reads 0.51x. PX4 multiplies
+    # by the scale unclamped (VehicleOpticalFlow.cpp); the metadata max is 1.5.
+    "SENS_FLOW_SCALE",
+}
 
 spec = importlib.util.spec_from_file_location("set_profile", ROOT / "scripts" / "set-profile.py")
 set_profile = importlib.util.module_from_spec(spec)
@@ -54,9 +60,11 @@ def errors(path, meta, image):
         if set_profile.IGNORE.fullmatch(name):
             continue  # counters PX4 updates itself (LND_FLIGHT_T_LO is a uint32 half: negative is fine)
         tol = 1e-6 * max(1.0, abs(value))
-        if p.findtext("min") is not None and value < float(p.findtext("min")) - tol:
+        if name in RANGE_OVERRIDES:
+            pass
+        elif p.findtext("min") is not None and value < float(p.findtext("min")) - tol:
             out.append(f"{name} = {value}: below min {p.findtext('min')}")
-        if p.findtext("max") is not None and value > float(p.findtext("max")) + tol:
+        elif p.findtext("max") is not None and value > float(p.findtext("max")) + tol:
             out.append(f"{name} = {value}: above max {p.findtext('max')}")
         codes = [float(v.get("code")) for v in p.iter("value")]
         if codes and not any(set_profile.same(float(value), c) for c in codes):

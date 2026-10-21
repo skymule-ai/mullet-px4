@@ -32,6 +32,11 @@ the drone's `baseline.params` (*Parameters → Tools → Load from file*) and re
 All of them also set `EKF2_RNG_A_VMAX 2.0`, `EKF2_MIN_RNG 0.21` and `EKF2_MAG_CHECK` (1 = field strength
 check, the baseline value; `outdoor-vio` sets 3 = strength + inclination).
 
+**Temporary (issue [#4](https://github.com/skymule-ai/mullet-px4/issues/4)):** every profile also sets `SENS_FLOW_SCALE 1.95`, `EKF2_OF_GYR_SRC 1` and
+`EKF2_OF_QMIN 140`. The hflow board labels each flow message as 15.872 ms when it covers ~8.1 ms, so flow reads at 0.51x. `drones/mullet1/baseline.params` carries the
+same values. To revert after the firmware fix, set 1 and 0 back in the profiles and the baseline: don't delete the profile
+lines, `set-profile.py` only writes what the profiles set.
+
 | Profile | `EKF2_EV_CTRL` | `EKF2_MAG_TYPE` | Bridge | Use |
 | --- | --- | --- | --- | --- |
 | `outdoor` (default) | 0 | 0 | shadow | GPS + compass; vision recorded only |
