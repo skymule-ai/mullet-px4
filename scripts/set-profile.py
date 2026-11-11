@@ -83,12 +83,23 @@ class Px4:
         self.M = mavutil.mavlink
         self._connect = lambda: mavutil.mavlink_connection(url, source_system=254, source_component=190)
         self.m = self._connect()
+        self.sys = self._find_px4()
+
+    def _find_px4(self, timeout=10):
+        """PX4's system ID, from its own heartbeat: MAV_SYS_ID differs per drone (instance + 1), and other
+        senders share the link (QGroundControl's heartbeat is sys 255 and even has the armed bit set)."""
+        end = time.time() + timeout
+        while time.time() < end:
+            hb = self.m.recv_match(type="HEARTBEAT", blocking=True, timeout=1)
+            if hb and hb.autopilot == self.M.MAV_AUTOPILOT_PX4 and hb.get_srcComponent() == 1:
+                return hb.get_srcSystem()
+        sys.exit("no PX4 heartbeat (is mavlink-router up?)")
 
     def _recv(self, mtype, timeout):
         end = time.time() + timeout
         while time.time() < end:
             msg = self.m.recv_match(type=mtype, blocking=True, timeout=max(0.1, end - time.time()))
-            if msg and msg.get_srcSystem() == 1 and msg.get_srcComponent() == 1:
+            if msg and msg.get_srcSystem() == self.sys and msg.get_srcComponent() == 1:
                 return msg
         return None
 
@@ -106,7 +117,7 @@ class Px4:
 
     def read(self, name):
         for _ in range(5):
-            self.m.mav.param_request_read_send(1, 1, name.encode(), -1)
+            self.m.mav.param_request_read_send(self.sys, 1, name.encode(), -1)
             end = time.time() + 2
             while (msg := self._recv("PARAM_VALUE", end - time.time())) is not None:
                 if msg.param_id == name:
@@ -115,11 +126,11 @@ class Px4:
 
     def write(self, name, value, ptype):
         raw = value if ptype == REAL32 else struct.unpack("<f", struct.pack("<i", value))[0]
-        self.m.mav.param_set_send(1, 1, name.encode(), raw, ptype)
+        self.m.mav.param_set_send(self.sys, 1, name.encode(), raw, ptype)
         time.sleep(0.3)
 
     def read_all(self):
-        self.m.mav.param_request_list_send(1, 1)
+        self.m.mav.param_request_list_send(self.sys, 1)
         params, total, last = {}, None, time.time()
         while time.time() - last < 5 and len(params) != total:
             msg = self._recv("PARAM_VALUE", 1)
@@ -131,7 +142,7 @@ class Px4:
         return params
 
     def _command(self, command, param1):
-        self.m.mav.command_long_send(1, 1, command, 0, param1, 0, 0, 0, 0, 0, 0)
+        self.m.mav.command_long_send(self.sys, 1, command, 0, param1, 0, 0, 0, 0, 0, 0)
         end = time.time() + 5
         while (ack := self._recv("COMMAND_ACK", end - time.time())) is not None:
             if ack.command == command:
